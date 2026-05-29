@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package sensor;
+
+// A single sensor reading sent by the client
+message Reading {
+  int64  timestamp  = 1;
+  string sensor_id  = 2;
+  float  value      = 3;
+  string unit       = 4;
+}
+
+// Aggregated statistics returned by the server per sensor
+message AggregateStats {
+  string sensor_id = 1;
+  int32  count     = 2;
+  float  min       = 3;
+  float  max       = 4;
+  float  avg       = 5;
+}
+
+// The telemetry service
+service SensorService {
+  // Client streams readings → server streams back aggregates (bidirectional)
+  rpc SubmitReadings (stream Reading) returns (stream AggregateStats);
+}

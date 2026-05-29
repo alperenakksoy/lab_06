@@ -1,6 +1,5 @@
 from typing import Dict, List
 
-# In-memory veri deposu
 _db: Dict[str, List[float]] = {}
 
 def add_reading_to_store(sensor_id: str, value: float):

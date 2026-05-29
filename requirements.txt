@@ -5,3 +5,5 @@ uvicorn
 psycopg2-binary
 slowapi
 requests
+websockets
+paho-mqtt
