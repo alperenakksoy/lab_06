@@ -1,12 +1,9 @@
 fastapi
 pydantic
-sqlalchemy
 uvicorn
-psycopg2-binary
-slowapi
 requests
 websockets
+aiohttp
 paho-mqtt
 grpcio
 grpcio-tools
-paho-mqtt

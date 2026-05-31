@@ -49,6 +49,9 @@ services:
 
   # -------------------------------------------------------------------------
   # 3. WebSocket
+  #    Health check now hits the dedicated HTTP health endpoint (port 8080)
+  #    instead of opening a live WebSocket connection, which avoids spurious
+  #    disconnect log noise and is more reliable under load.
   # -------------------------------------------------------------------------
   websocket:
     build:
@@ -56,14 +59,14 @@ services:
       dockerfile: Dockerfile.websocket
     container_name: telemetry-websocket
     ports:
-      - "8003:8003"
+      - "8003:8003"   # WebSocket
+      - "8080:8080"   # HTTP health
     networks:
       - telemetry-net
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import asyncio, websockets; asyncio.run(websockets.connect('ws://localhost:8003/telemetry'))"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
-      timeout: 8s
+      timeout: 5s
       retries: 5
       start_period: 5s
     restart: unless-stopped
@@ -90,17 +93,59 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------------------------
-  # 5. MQTT Service (subscriber + publisher — depends on broker)
+  # 5a. MQTT Service — QoS 0 (fire-and-forget)
+  #     Publishes one aggregate per reading at QoS 0.
   # -------------------------------------------------------------------------
-  mqtt-service:
+  mqtt-service-qos0:
     build:
       context: .
       dockerfile: Dockerfile.http1      # reuses python:3.11-slim base
-    container_name: telemetry-mqtt-service
+    container_name: telemetry-mqtt-service-qos0
     command: ["python", "service_mqtt.py"]
     environment:
       - MQTT_BROKER_HOST=mqtt-broker
       - MQTT_BROKER_PORT=1883
+      - MQTT_SERVICE_QOS=0
+    networks:
+      - telemetry-net
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # 5b. MQTT Service — QoS 1 (at-least-once)
+  # -------------------------------------------------------------------------
+  mqtt-service-qos1:
+    build:
+      context: .
+      dockerfile: Dockerfile.http1
+    container_name: telemetry-mqtt-service-qos1
+    command: ["python", "service_mqtt.py"]
+    environment:
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      - MQTT_SERVICE_QOS=1
+    networks:
+      - telemetry-net
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # 5c. MQTT Service — QoS 2 (exactly-once)
+  # -------------------------------------------------------------------------
+  mqtt-service-qos2:
+    build:
+      context: .
+      dockerfile: Dockerfile.http1
+    container_name: telemetry-mqtt-service-qos2
+    command: ["python", "service_mqtt.py"]
+    environment:
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      - MQTT_SERVICE_QOS=2
     networks:
       - telemetry-net
     depends_on:

@@ -3,23 +3,32 @@ import os
 import asyncio
 import json
 import websockets
+from aiohttp import web
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "core"))
+# Insert the *parent* of "core/" so "from core.X import ..." resolves correctly.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.service import process_single_reading
 from core.entity import Reading as CoreReading
 
 HOST = "0.0.0.0"
-PORT = 8003
+WS_PORT   = 8003
+HTTP_PORT = 8080   # dedicated health-check port (avoids abusing the WS handler)
 
+
+# ---------------------------------------------------------------------------
+# WebSocket handler
+# ---------------------------------------------------------------------------
 
 async def handle_client(websocket):
     """
     One coroutine per connected client.
 
     Message flow:
-      CLIENT  →  {"type": "reading", "timestamp": ..., "sensor_id": ..., "value": ..., "unit": ...}
-      SERVER  →  {"type": "aggregate", "sensor_id": ..., "count": ..., "min": ..., "max": ..., "avg": ...}
+      CLIENT  →  {"type": "reading", "timestamp": ..., "sensor_id": ...,
+                  "value": ..., "unit": ...}
+      SERVER  →  {"type": "aggregate", "sensor_id": ..., "count": ...,
+                  "min": ..., "max": ..., "avg": ...}
 
     The connection stays open — client keeps sending readings,
     server keeps streaming aggregates back, one per reading.
@@ -53,7 +62,7 @@ async def handle_client(websocket):
             if missing:
                 await websocket.send(json.dumps({
                     "type": "error",
-                    "detail": f"missing fields: {missing}"
+                    "detail": f"missing fields: {list(missing)}"
                 }))
                 continue
 
@@ -77,7 +86,7 @@ async def handle_client(websocket):
 
             # --- Send aggregate back ---
             await websocket.send(json.dumps({
-                "type": "aggregate",
+                "type":      "aggregate",
                 "sensor_id": stats.sensor_id,
                 "count":     stats.count,
                 "min":       stats.min,
@@ -91,10 +100,34 @@ async def handle_client(websocket):
         print(f"[WS] Client disconnected with error: {client_addr} — {e}")
 
 
+# ---------------------------------------------------------------------------
+# HTTP health endpoint (aiohttp) — avoids docker-compose opening live WS
+# connections just to health-check the service.
+# ---------------------------------------------------------------------------
+
+async def health_handler(request):
+    return web.json_response({"status": "ok"})
+
+
+async def run_health_server():
+    app = web.Application()
+    app.router.add_get("/health", health_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, HOST, HTTP_PORT)
+    await site.start()
+    print(f"[HTTP] Health endpoint: http://{HOST}:{HTTP_PORT}/health")
+
+
+# ---------------------------------------------------------------------------
+# Main — run WS server and HTTP health server concurrently
+# ---------------------------------------------------------------------------
+
 async def main():
-    print(f"[WS] WebSocket server starting on ws://{HOST}:{PORT}/telemetry")
-    async with websockets.serve(handle_client, HOST, PORT, path="/telemetry"):
-        await asyncio.Future()  # run forever
+    print(f"[WS] WebSocket server starting on ws://{HOST}:{WS_PORT}/telemetry")
+    await run_health_server()
+    async with websockets.serve(handle_client, HOST, WS_PORT, path="/telemetry"):
+        await asyncio.Future()   # run forever
 
 
 if __name__ == "__main__":
