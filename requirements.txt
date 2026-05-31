@@ -7,3 +7,6 @@ slowapi
 requests
 websockets
 paho-mqtt
+grpcio
+grpcio-tools
+paho-mqtt
