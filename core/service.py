@@ -1,5 +1,5 @@
-from entity import Reading, AggregateStats
-from store import add_reading_to_store, get_values_for_sensor
+from core.entity import Reading, AggregateStats
+from core.store import add_reading_to_store, get_values_for_sensor
 
 
 def process_single_reading(reading: Reading) -> AggregateStats:
@@ -12,5 +12,5 @@ def process_single_reading(reading: Reading) -> AggregateStats:
         count=count,
         min=min(values),
         max=max(values),
-        avg=sum(values) / count
+        avg=sum(values) / count,
     )

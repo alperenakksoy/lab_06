@@ -11,7 +11,8 @@ import websockets
 import paho.mqtt.client as mqtt
 import grpc
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "core"))
+# Insert the parent of core/ so "from core.X import ..." resolves correctly.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.entity import Reading as CoreReading
 
@@ -30,7 +31,7 @@ MQTT_HOST   = os.getenv("MQTT_HOST",  "localhost")
 MQTT_PORT   = int(os.getenv("MQTT_PORT", 1883))
 
 TOTAL_READINGS  = 1000
-SENSOR_COUNT    = 5                          # s1 … s5
+SENSOR_COUNT    = 5
 READINGS_EACH   = TOTAL_READINGS // SENSOR_COUNT   # 200 per sensor
 
 RESULTS_FILE = "benchmark_results.json"
@@ -76,7 +77,6 @@ def bench_http(readings):
     latencies = []
     total_bytes = 0
 
-    # Connection setup time
     t0 = now_ms()
     resp = requests.get(f"{HTTP_URL}/health", timeout=5)
     setup_time = now_ms() - t0
@@ -94,13 +94,13 @@ def bench_http(readings):
     total_time_s = (now_ms() - start) / 1000
 
     return {
-        "protocol":        "http1",
-        "setup_time_ms":   round(setup_time, 2),
-        "latency_ms":      round(statistics.mean(latencies), 2),
-        "latency_p95_ms":  round(percentile(latencies, 95), 2),
-        "latency_p99_ms":  round(percentile(latencies, 99), 2),
+        "protocol":           "http1",
+        "setup_time_ms":      round(setup_time, 2),
+        "latency_ms":         round(statistics.mean(latencies), 2),
+        "latency_p95_ms":     round(percentile(latencies, 95), 2),
+        "latency_p99_ms":     round(percentile(latencies, 99), 2),
         "throughput_msg_sec": round(len(readings) / total_time_s, 2),
-        "bytes_total":     total_bytes,
+        "bytes_total":        total_bytes,
     }
 
 # ---------------------------------------------------------------------------
@@ -109,10 +109,8 @@ def bench_http(readings):
 
 def bench_grpc(readings):
     print("\n[gRPC] Starting benchmark...")
-    latencies = []
     total_bytes = 0
 
-    # Connection setup time
     t0 = now_ms()
     channel = grpc.insecure_channel(GRPC_HOST)
     stub = sensor_pb2_grpc.SensorServiceStub(channel)
@@ -120,7 +118,7 @@ def bench_grpc(readings):
     setup_time = now_ms() - t0
 
     def reading_generator(batch):
-        nonlocal total_bytes  # FIX: Allows modification of the outer variable
+        nonlocal total_bytes
         for r in batch:
             pb = sensor_pb2.Reading(
                 timestamp=r["timestamp"],
@@ -132,12 +130,11 @@ def bench_grpc(readings):
             yield pb
 
     start = now_ms()
-
-    # Bidirectional streaming — send all, collect all responses
     t0 = now_ms()
     responses = list(stub.SubmitReadings(reading_generator(readings)))
     rtt = now_ms() - t0
-    latencies = [rtt / len(readings)] * len(readings)   # avg per message
+    # Bidirectional stream — distribute total RTT evenly across all messages
+    latencies = [rtt / len(readings)] * len(readings)
 
     for r in responses:
         total_bytes += r.ByteSize()
@@ -193,24 +190,48 @@ def bench_websocket(readings):
     return asyncio.run(_ws_bench(readings))
 
 # ---------------------------------------------------------------------------
-# 4. MQTT benchmark  (QoS 0, 1, 2)
+# 4. MQTT benchmark  (QoS 0, 1, or 2)
+#
+# IMPORTANT: run with only ONE mqtt-service-qos* container active at a time.
+# If all three QoS service instances are running simultaneously, each reading
+# triggers three aggregate publishes (one per instance), and the subscriber
+# receives 3000 messages instead of 1000, causing the benchmark to cut off
+# after ~333 readings.  The guard below detects this and warns.
+#
+# To isolate a single QoS for benchmarking:
+#   docker compose stop mqtt-service-qos0 mqtt-service-qos2   # benchmark QoS 1
+#   python benchmark.py
+#   docker compose start mqtt-service-qos0 mqtt-service-qos2
 # ---------------------------------------------------------------------------
 
 def bench_mqtt(readings, qos=1):
     print(f"\n[MQTT QoS {qos}] Starting benchmark...")
     latencies   = []
-    total_bytes = [0]  # FIX: Converted to list to bypass scope limitations
+    total_bytes = [0]
     received    = threading.Event()
     msg_count   = [0]
+    # Track how many distinct QoS levels we're seeing — warns if > 1 service running
+    seen_qos    = set()
     lock        = threading.Lock()
 
-    # --- Subscriber client ---
     sub_client = mqtt.Client(client_id=f"bench-sub-qos{qos}", protocol=mqtt.MQTTv5)
 
     def on_sub_message(client, userdata, msg):
         with lock:
+            # Only count messages published at the expected QoS level.
+            # This prevents triple-counting when all three service instances run.
+            try:
+                payload_data = json.loads(msg.payload.decode())
+                msg_qos = payload_data.get("qos")
+                seen_qos.add(msg_qos)
+                if msg_qos != qos:
+                    return   # message from a different QoS service instance — ignore
+            except Exception:
+                pass   # unparseable payload — count it anyway for robustness
+
             msg_count[0] += 1
-            total_bytes[0] += len(msg.payload)  # FIX: Safely incrementing bytes
+            total_bytes[0] += len(msg.payload)
+
         if msg_count[0] >= len(readings):
             received.set()
 
@@ -219,7 +240,6 @@ def bench_mqtt(readings, qos=1):
     sub_client.subscribe("sensors/aggregate/#", qos=qos)
     sub_client.loop_start()
 
-    # --- Publisher client ---
     pub_client = mqtt.Client(client_id=f"bench-pub-qos{qos}", protocol=mqtt.MQTTv5)
 
     t0 = now_ms()
@@ -232,10 +252,9 @@ def bench_mqtt(readings, qos=1):
         payload = json.dumps(reading)
         t_send = now_ms()
         pub_client.publish("sensors/readings", payload=payload, qos=qos)
-        latencies.append(now_ms() - t_send)   # publish RTT (no ack for QoS 0)
-        total_bytes[0] += len(payload.encode())  # FIX: Safely incrementing bytes
+        latencies.append(now_ms() - t_send)
+        total_bytes[0] += len(payload.encode())
 
-    # Wait for all aggregates to be received (max 30s)
     received.wait(timeout=30)
     total_time_s = (now_ms() - start) / 1000
 
@@ -244,6 +263,10 @@ def bench_mqtt(readings, qos=1):
     pub_client.disconnect()
     sub_client.disconnect()
 
+    if len(seen_qos) > 1:
+        print(f"  [WARN] Received aggregates from multiple QoS levels: {seen_qos}.")
+        print(f"  [WARN] Stop other mqtt-service-qos* containers for accurate results.")
+
     return {
         "protocol":           f"mqtt_qos{qos}",
         "setup_time_ms":      round(setup_time, 2),
@@ -251,7 +274,7 @@ def bench_mqtt(readings, qos=1):
         "latency_p95_ms":     round(percentile(latencies, 95), 2),
         "latency_p99_ms":     round(percentile(latencies, 99), 2),
         "throughput_msg_sec": round(len(readings) / total_time_s, 2),
-        "bytes_total":        total_bytes[0],  # FIX: Extracting the value from the list
+        "bytes_total":        total_bytes[0],
         "messages_received":  msg_count[0],
     }
 
@@ -260,7 +283,7 @@ def bench_mqtt(readings, qos=1):
 # ---------------------------------------------------------------------------
 
 def main():
-    random.seed(42)   # reproducible values
+    random.seed(42)
     readings = make_readings()
     print(f"Generated {len(readings)} readings across {SENSOR_COUNT} sensors")
 
@@ -273,7 +296,6 @@ def main():
     for qos in [0, 1, 2]:
         results.append(bench_mqtt(readings, qos=qos))
 
-    # --- Print summary table ---
     print("\n" + "=" * 75)
     print(f"{'Protocol':<16} {'Setup(ms)':>10} {'Avg Lat(ms)':>12} {'P95(ms)':>9} {'P99(ms)':>9} {'Msg/s':>9}")
     print("=" * 75)
@@ -288,7 +310,6 @@ def main():
         )
     print("=" * 75)
 
-    # --- Save to JSON ---
     with open(RESULTS_FILE, "w") as f:
         json.dump(results, f, indent=2)
     print(f"\nResults saved to {RESULTS_FILE}")

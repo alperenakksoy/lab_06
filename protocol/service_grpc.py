@@ -4,8 +4,8 @@ import asyncio
 import grpc
 from concurrent import futures
 
-# Allow imports from shared/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "shared"))
+# Insert the parent of core/ so "from core.X import ..." resolves correctly.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.service import process_single_reading
 from core.entity import Reading as CoreReading
@@ -22,8 +22,8 @@ class SensorServiceServicer(sensor_pb2_grpc.SensorServiceServicer):
     Flow:
       1. Client opens a stream and sends Reading messages one by one.
       2. For every Reading received, the server:
-         - stores it via shared/store.py  (same store as all other services)
-         - computes the updated aggregate via shared/service.py
+         - stores it via core/store.py  (same store as all other services)
+         - computes the updated aggregate via core/service.py
          - immediately streams back an AggregateStats message
       3. When the client closes its side, the server closes its side too.
     """

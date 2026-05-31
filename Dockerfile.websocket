@@ -5,9 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY shared/           ./shared/
+COPY core/ ./core/
 COPY service_websocket.py .
 
-EXPOSE 8003
+EXPOSE 8003   
+EXPOSE 8080   
 
 CMD ["python", "service_websocket.py"]
