@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY core/ ./core/
+COPY service_mqtt.py .
+
+# No fixed port — this service connects OUT to the broker, it doesn't listen
+CMD ["python", "service_mqtt.py"]
