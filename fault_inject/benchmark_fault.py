@@ -1,20 +1,3 @@
-"""
-benchmark_fault.py — Task 5: Fault injection benchmark runner
-
-Workflow:
-  1. Run benchmark under NORMAL conditions   → saves normal_results.json
-  2. Apply latency fault   → run benchmark   → saves degraded_latency_results.json
-  3. Apply loss fault      → run benchmark   → saves degraded_loss_results.json
-  4. Apply bandwidth fault → run benchmark   → saves degraded_bandwidth_results.json
-  5. Reset network
-  6. Print comparison table across all conditions
-
-Requires:
-  - All four services running (docker-compose up)
-  - benchmark.py in the same directory
-  - fault_inject.sh in the same directory (run as sudo or root for tc)
-"""
-
 import subprocess
 import json
 import sys
@@ -23,7 +6,7 @@ import time
 import statistics
 
 # Import the benchmark functions directly
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from benchmark import make_readings, bench_http, bench_grpc, bench_websocket, bench_mqtt
 
 import random

@@ -1,0 +1,59 @@
+[
+  {
+    "protocol": "http1",
+    "setup_time_ms": 16.66,
+    "latency_ms": 14.15,
+    "latency_p95_ms": 18.19,
+    "latency_p99_ms": 63.6,
+    "throughput_msg_sec": 70.49,
+    "bytes_total": 169247
+  },
+  {
+    "protocol": "grpc",
+    "setup_time_ms": 84.65,
+    "latency_ms": 0.58,
+    "latency_p95_ms": 0.58,
+    "latency_p99_ms": 0.58,
+    "throughput_msg_sec": 1722.25,
+    "bytes_total": 40000
+  },
+  {
+    "protocol": "websocket",
+    "setup_time_ms": 102.96,
+    "latency_ms": 0.86,
+    "latency_p95_ms": 2.72,
+    "latency_p99_ms": 4.5,
+    "throughput_msg_sec": 1147.65,
+    "bytes_total": 189598
+  },
+  {
+    "protocol": "mqtt_qos0",
+    "setup_time_ms": 0.45,
+    "latency_ms": 0.01,
+    "latency_p95_ms": 0.05,
+    "latency_p99_ms": 0.1,
+    "throughput_msg_sec": 386.12,
+    "bytes_total": 160591,
+    "messages_received": 1000
+  },
+  {
+    "protocol": "mqtt_qos1",
+    "setup_time_ms": 0.78,
+    "latency_ms": 0.01,
+    "latency_p95_ms": 0.01,
+    "latency_p99_ms": 0.05,
+    "throughput_msg_sec": 33.31,
+    "bytes_total": 125518,
+    "messages_received": 600
+  },
+  {
+    "protocol": "mqtt_qos2",
+    "setup_time_ms": 0.82,
+    "latency_ms": 0.01,
+    "latency_p95_ms": 0.01,
+    "latency_p99_ms": 0.09,
+    "throughput_msg_sec": 33.31,
+    "bytes_total": 144462,
+    "messages_received": 816
+  }
+]

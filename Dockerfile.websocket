@@ -6,9 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY core/ ./core/
-COPY service_websocket.py .
+COPY protocol/service_websocket.py .  
 
-EXPOSE 8003   
-EXPOSE 8080   
+EXPOSE 8003
 
 CMD ["python", "service_websocket.py"]

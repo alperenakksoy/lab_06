@@ -6,9 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY core/ ./core/
-COPY service_http1.py .
+COPY protocol/service_http1.py .
 
 EXPOSE 8001
 
-# FastAPI requires uvicorn to serve — "python service_http1.py" does nothing
 CMD ["uvicorn", "service_http1:app", "--host", "0.0.0.0", "--port", "8001"]

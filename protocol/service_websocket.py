@@ -13,29 +13,16 @@ from core.entity import Reading as CoreReading
 
 HOST = "0.0.0.0"
 WS_PORT   = 8003
-HTTP_PORT = 8080   # dedicated health-check port (avoids abusing the WS handler)
-
-
-# ---------------------------------------------------------------------------
-# WebSocket handler
-# ---------------------------------------------------------------------------
+HTTP_PORT = 8080
 
 async def handle_client(websocket):
-    """
-    One coroutine per connected client.
+    path = websocket.request.path if hasattr(websocket, "request") else "/telemetry"
+    if path != "/telemetry":
+        await websocket.close(1008, "wrong path")
+        return
 
-    Message flow:
-      CLIENT  →  {"type": "reading", "timestamp": ..., "sensor_id": ...,
-                  "value": ..., "unit": ...}
-      SERVER  →  {"type": "aggregate", "sensor_id": ..., "count": ...,
-                  "min": ..., "max": ..., "avg": ...}
-
-    The connection stays open — client keeps sending readings,
-    server keeps streaming aggregates back, one per reading.
-    """
     client_addr = websocket.remote_address
     print(f"[WS] Client connected: {client_addr}")
-
     try:
         async for raw_message in websocket:
             # --- Parse incoming JSON ---
@@ -48,7 +35,6 @@ async def handle_client(websocket):
                 }))
                 continue
 
-            # --- Validate message type ---
             if data.get("type") != "reading":
                 await websocket.send(json.dumps({
                     "type": "error",
@@ -56,7 +42,6 @@ async def handle_client(websocket):
                 }))
                 continue
 
-            # --- Validate required fields ---
             required = {"timestamp", "sensor_id", "value", "unit"}
             missing = required - data.keys()
             if missing:
@@ -99,12 +84,6 @@ async def handle_client(websocket):
     except websockets.exceptions.ConnectionClosedError as e:
         print(f"[WS] Client disconnected with error: {client_addr} — {e}")
 
-
-# ---------------------------------------------------------------------------
-# HTTP health endpoint (aiohttp) — avoids docker-compose opening live WS
-# connections just to health-check the service.
-# ---------------------------------------------------------------------------
-
 async def health_handler(request):
     return web.json_response({"status": "ok"})
 
@@ -118,16 +97,11 @@ async def run_health_server():
     await site.start()
     print(f"[HTTP] Health endpoint: http://{HOST}:{HTTP_PORT}/health")
 
-
-# ---------------------------------------------------------------------------
-# Main — run WS server and HTTP health server concurrently
-# ---------------------------------------------------------------------------
-
 async def main():
-    print(f"[WS] WebSocket server starting on ws://{HOST}:{WS_PORT}/telemetry")
+    print(f"[WS] WebSocket server starting on ws://{HOST}:{WS_PORT} (path: /telemetry)")
     await run_health_server()
-    async with websockets.serve(handle_client, HOST, WS_PORT, path="/telemetry"):
-        await asyncio.Future()   # run forever
+    async with websockets.serve(handle_client, HOST, WS_PORT):
+        await asyncio.Future()
 
 
 if __name__ == "__main__":

@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY core/ ./core/
-COPY service_mqtt.py .
+COPY protocol/service_mqtt.py .
 
-# No fixed port — this service connects OUT to the broker, it doesn't listen
+EXPOSE 1883
+
 CMD ["python", "service_mqtt.py"]

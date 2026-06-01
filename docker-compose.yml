@@ -19,7 +19,8 @@ services:
     networks:
       - telemetry-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "python", "-c",
+         "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -62,7 +63,8 @@ services:
     networks:
       - telemetry-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: [ "CMD", "python", "-c",
+              "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -153,3 +155,16 @@ services:
       mqtt-broker:
         condition: service_healthy
     restart: unless-stopped
+
+  toxiproxy:
+      image: ghcr.io/shopify/toxiproxy:2.9.0
+      container_name: telemetry-toxiproxy
+      ports:
+        - "8474:8474"
+        - "18001:18001"
+        - "55051:55051"
+        - "18003:18003"
+        - "11883:11883"
+      networks:
+        - telemetry-net
+      restart: unless-stopped
