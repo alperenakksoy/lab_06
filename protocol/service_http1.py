@@ -13,7 +13,7 @@ def post_readings(payload: ReadingsPayload):
     seen: dict[str, AggregateStats] = {}
     for reading in payload.readings:
         stats = process_single_reading(reading)
-        seen[stats.sensor_id] = stats  # keeps latest aggregate per sensor
+        seen[stats.sensor_id] = stats
 
     return list(seen.values())
 

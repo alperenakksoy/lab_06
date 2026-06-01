@@ -4,29 +4,16 @@ import asyncio
 import grpc
 from concurrent import futures
 
-# Insert the parent of core/ so "from core.X import ..." resolves correctly.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.service import process_single_reading
 from core.entity import Reading as CoreReading
 
-# gRPC generated stubs (produced by: python -m grpc_tools.protoc)
 import sensor_pb2
 import sensor_pb2_grpc
 
 
 class SensorServiceServicer(sensor_pb2_grpc.SensorServiceServicer):
-    """
-    Bidirectional streaming RPC.
-
-    Flow:
-      1. Client opens a stream and sends Reading messages one by one.
-      2. For every Reading received, the server:
-         - stores it via core/store.py  (same store as all other services)
-         - computes the updated aggregate via core/service.py
-         - immediately streams back an AggregateStats message
-      3. When the client closes its side, the server closes its side too.
-    """
 
     async def SubmitReadings(self, request_iterator, context):
         async for pb_reading in request_iterator:
@@ -38,10 +25,8 @@ class SensorServiceServicer(sensor_pb2_grpc.SensorServiceServicer):
                 unit=pb_reading.unit,
             )
 
-            # Reuse the exact same business logic as the HTTP service
             stats = process_single_reading(core_reading)
 
-            # Stream back an AggregateStats message
             yield sensor_pb2.AggregateStats(
                 sensor_id=stats.sensor_id,
                 count=stats.count,

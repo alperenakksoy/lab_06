@@ -6,9 +6,7 @@ networks:
 
 services:
 
-  # -------------------------------------------------------------------------
-  # 1. REST / HTTP 1.1
-  # -------------------------------------------------------------------------
+ # 1. REST / HTTP 1.1
   http1:
     build:
       context: .
@@ -27,9 +25,7 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # -------------------------------------------------------------------------
   # 2. gRPC
-  # -------------------------------------------------------------------------
   grpc:
     build:
       context: .
@@ -48,10 +44,7 @@ services:
       start_period: 8s
     restart: unless-stopped
 
-  # -------------------------------------------------------------------------
   # 3. WebSocket
-  #    WS traffic on 8003, HTTP health endpoint on 8080.
-  # -------------------------------------------------------------------------
   websocket:
     build:
       context: .
@@ -71,9 +64,7 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # -------------------------------------------------------------------------
-  # 4. MQTT Broker (Mosquitto) — eclipse-mosquitto image
-  # -------------------------------------------------------------------------
+  # 4. MQTT Broker (Mosquitto)
   mqtt-broker:
     build:
       context: .
@@ -92,16 +83,7 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # -------------------------------------------------------------------------
-  # 5a. MQTT Service — QoS 0 (fire-and-forget)
-  #
-  #     Uses Dockerfile.mqtt-service (python:3.11-slim + service_mqtt.py).
-  #     NOT Dockerfile.http1 — that image doesn't copy service_mqtt.py or core/.
-  #
-  #     For accurate benchmarking: stop the other two QoS services so only
-  #     one instance processes readings at a time (avoids 3x message count).
-  #       docker compose stop mqtt-service-qos1 mqtt-service-qos2
-  # -------------------------------------------------------------------------
+  # MQTT Service — QoS 0
   mqtt-service-qos0:
     build:
       context: .
@@ -118,9 +100,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # -------------------------------------------------------------------------
-  # 5b. MQTT Service — QoS 1 (at-least-once)
-  # -------------------------------------------------------------------------
+  # MQTT Service — QoS 1
   mqtt-service-qos1:
     build:
       context: .
@@ -137,9 +117,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # -------------------------------------------------------------------------
-  # 5c. MQTT Service — QoS 2 (exactly-once)
-  # -------------------------------------------------------------------------
+  # MQTT Service — QoS 2
   mqtt-service-qos2:
     build:
       context: .

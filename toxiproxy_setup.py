@@ -11,7 +11,6 @@ PROXIES = [
 ]
 
 def reset_all():
-    """Delete all existing proxies."""
     r = requests.get(f"{API}/proxies")
     for name in r.json():
         requests.delete(f"{API}/proxies/{name}")

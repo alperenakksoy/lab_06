@@ -5,17 +5,13 @@ import os
 import time
 import statistics
 
-# Import the benchmark functions directly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from benchmark import make_readings, bench_http, bench_grpc, bench_websocket, bench_mqtt
 
 import random
 random.seed(42)
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
-
 SCENARIOS = [
     ("normal",    None),
     ("latency",   ["sudo", "./fault_inject.sh", "apply", "latency"]),
@@ -25,13 +21,9 @@ SCENARIOS = [
 
 RESET_CMD = ["sudo", "./fault_inject.sh", "reset"]
 
-OUTPUT_DIR = "."   # save JSON files here
+OUTPUT_DIR = "."
 
-
-# ---------------------------------------------------------------------------
 # Run one full benchmark pass (all protocols)
-# ---------------------------------------------------------------------------
-
 def run_benchmark_pass(label: str, readings: list) -> list:
     print(f"\n{'='*60}")
     print(f"  Running benchmark: {label.upper()}")
@@ -64,11 +56,7 @@ def run_benchmark_pass(label: str, readings: list) -> list:
 
     return results
 
-
-# ---------------------------------------------------------------------------
 # Apply / reset network faults
-# ---------------------------------------------------------------------------
-
 def apply_fault(cmd: list):
     print(f"\n[FAULT] Applying: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -85,11 +73,7 @@ def reset_fault():
     subprocess.run(RESET_CMD, capture_output=True, text=True)
     time.sleep(0.5)
 
-
-# ---------------------------------------------------------------------------
 # Comparison table
-# ---------------------------------------------------------------------------
-
 def print_comparison(all_results: dict):
     conditions = list(all_results.keys())
     protocols  = ["http1", "grpc", "websocket", "mqtt_qos0", "mqtt_qos1", "mqtt_qos2"]
@@ -146,11 +130,7 @@ def print_comparison(all_results: dict):
 
     print("=" * 90)
 
-
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
-
 def main():
     readings = make_readings()
     print(f"Generated {len(readings)} readings across 5 sensors")
@@ -158,33 +138,26 @@ def main():
     all_results = {}
 
     for condition, fault_cmd in SCENARIOS:
-        # Apply fault (or skip for normal)
         if fault_cmd:
             apply_fault(fault_cmd)
         else:
-            reset_fault()   # ensure clean state for normal run
-
-        # Run benchmark
+            reset_fault()
         results = run_benchmark_pass(condition, readings)
         all_results[condition] = results
 
-        # Save per-condition JSON
         filename = f"{OUTPUT_DIR}/{condition}_results.json"
         with open(filename, "w") as f:
             json.dump(results, f, indent=2)
         print(f"\n[SAVED] {filename}")
 
-        # Reset after each degraded scenario
         if fault_cmd:
             reset_fault()
 
-    # Save combined JSON
     combined_file = f"{OUTPUT_DIR}/all_results.json"
     with open(combined_file, "w") as f:
         json.dump(all_results, f, indent=2)
     print(f"\n[SAVED] {combined_file}")
 
-    # Print comparison
     print_comparison(all_results)
 
 

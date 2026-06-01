@@ -5,7 +5,6 @@ import json
 import websockets
 from aiohttp import web
 
-# Insert the *parent* of "core/" so "from core.X import ..." resolves correctly.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.service import process_single_reading

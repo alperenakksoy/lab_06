@@ -1,38 +1,3 @@
-"""
-gateway.py — Task 4: Protocol Gateway (REST → gRPC + MQTT fan-out)
-
-Listens on POST /readings/fanout (HTTP, port 8004).
-
-Request body:
-  {
-    "readings": [{"timestamp": ..., "sensor_id": ..., "value": ..., "unit": ...}, ...],
-    "grpc_target": "192.168.X.Y:50051",
-    "mqtt_brokers": ["192.168.X.Y:1883", ...]
-  }
-
-Behaviour:
-  - Simultaneously sends readings to the gRPC service (bidirectional streaming)
-    AND publishes each reading to every MQTT broker listed.
-  - Collects all responses within FAN_OUT_TIMEOUT_S seconds.
-  - If one protocol fails or times out, still returns results from the other.
-  - All interactions are logged.
-
-Response:
-  {
-    "grpc_aggregates": [...] | null,
-    "mqtt_aggregates": [...] | null,
-    "total_time_ms": 1500,
-    "errors": {
-      "grpc": "timeout" | "<error message>" | null,
-      "mqtt": "timeout" | "<error message>" | null
-    }
-  }
-
-Run:
-  python gateway.py
-  # or via docker-compose on port 8004
-"""
-
 import sys
 import os
 import json
@@ -49,15 +14,12 @@ from pydantic import BaseModel
 from typing import List
 import uvicorn
 
-# Insert project root so core.* imports resolve
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sensor_pb2
 import sensor_pb2_grpc
 
-# ---------------------------------------------------------------------------
 # Logging
-# ---------------------------------------------------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,19 +27,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("gateway")
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
 
 GATEWAY_HOST       = "0.0.0.0"
 GATEWAY_PORT       = 8004
-FAN_OUT_TIMEOUT_S  = 5.0          # max seconds to wait for each protocol
-MQTT_COLLECT_S     = 3.0          # how long to collect MQTT aggregate replies
+FAN_OUT_TIMEOUT_S  = 5.0
+MQTT_COLLECT_S     = 3.0
 
-# ---------------------------------------------------------------------------
 # Pydantic models
-# ---------------------------------------------------------------------------
-
 class ReadingIn(BaseModel):
     timestamp: int
     sensor_id: str
@@ -86,8 +43,8 @@ class ReadingIn(BaseModel):
 
 class FanOutRequest(BaseModel):
     readings: List[ReadingIn]
-    grpc_target: str                # e.g. "192.168.1.10:50051"
-    mqtt_brokers: List[str]         # e.g. ["192.168.1.10:1883", "192.168.1.11:1883"]
+    grpc_target: str
+    mqtt_brokers: List[str]
 
 class FanOutResponse(BaseModel):
     grpc_aggregates: Optional[list] = None
@@ -95,10 +52,7 @@ class FanOutResponse(BaseModel):
     total_time_ms: float
     errors: dict
 
-# ---------------------------------------------------------------------------
 # App
-# ---------------------------------------------------------------------------
-
 app = FastAPI(title="HSRW Telemetry Gateway", version="1.0")
 
 
@@ -109,10 +63,6 @@ def health():
 
 @app.post("/readings/fanout", response_model=FanOutResponse)
 async def fan_out(req: FanOutRequest):
-    """
-    Fan out readings to gRPC service and MQTT brokers simultaneously.
-    Returns merged results from both within FAN_OUT_TIMEOUT_S seconds.
-    """
     if not req.readings:
         raise HTTPException(status_code=400, detail="readings list must not be empty")
     if not req.grpc_target:
@@ -127,7 +77,6 @@ async def fan_out(req: FanOutRequest):
 
     t_start = time.perf_counter()
 
-    # Run gRPC and MQTT fan-out concurrently
     grpc_task = asyncio.create_task(_grpc_fan_out(req.grpc_target, req.readings))
     mqtt_task = asyncio.create_task(_mqtt_fan_out(req.mqtt_brokers, req.readings))
 
@@ -152,16 +101,9 @@ async def fan_out(req: FanOutRequest):
         },
     )
 
-
-# ---------------------------------------------------------------------------
 # gRPC fan-out
-# ---------------------------------------------------------------------------
-
 async def _grpc_fan_out(target: str, readings: List[ReadingIn]) -> dict:
-    """
-    Open a bidirectional streaming RPC to `target`, send all readings,
-    collect all AggregateStats responses.  Enforces FAN_OUT_TIMEOUT_S.
-    """
+
     try:
         async def _call():
             channel = grpc.aio.insecure_channel(target)
@@ -207,12 +149,6 @@ async def _grpc_fan_out(target: str, readings: List[ReadingIn]) -> dict:
 # ---------------------------------------------------------------------------
 
 async def _mqtt_fan_out(brokers: List[str], readings: List[ReadingIn]) -> dict:
-    """
-    Publish all readings to every broker in `brokers` at QoS 1.
-    Subscribe to sensors/aggregate/# on each broker and collect replies
-    for MQTT_COLLECT_S seconds.  Runs synchronous paho calls in a thread
-    so the asyncio event loop isn't blocked.
-    """
     loop = asyncio.get_event_loop()
     try:
         result = await asyncio.wait_for(
@@ -229,25 +165,11 @@ async def _mqtt_fan_out(brokers: List[str], readings: List[ReadingIn]) -> dict:
 
 
 def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
-    """
-    Synchronous MQTT logic (runs in a thread-pool worker).
-
-    For each broker:
-      1. Connect a subscriber client → sensors/aggregate/#
-      2. Connect a publisher client → sensors/readings
-      3. Publish all readings
-      4. Collect aggregate replies for MQTT_COLLECT_S seconds
-      5. Disconnect both clients
-
-    Aggregates from all brokers are merged (de-duplicated by sensor_id,
-    keeping the latest aggregate seen).
-    """
-    all_aggregates: dict = {}       # sensor_id → latest aggregate dict
+    all_aggregates: dict = {}
     broker_errors: list  = []
     lock = threading.Lock()
 
     def _handle_one_broker(broker_str: str):
-        """Connect to one broker, publish readings, collect aggregates."""
         try:
             host, port_str = broker_str.rsplit(":", 1)
             port = int(port_str)
@@ -258,7 +180,7 @@ def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
         sub_done  = threading.Event()
         sub_lock  = threading.Lock()
 
-        # --- Subscriber ---
+        # Subscriber
         sub = mqtt.Client(
             client_id=f"gw-sub-{host}-{port}",
             protocol=mqtt.MQTTv5,
@@ -293,7 +215,7 @@ def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
 
         sub.loop_start()
 
-        # --- Publisher ---
+        # Publisher
         pub = mqtt.Client(
             client_id=f"gw-pub-{host}-{port}",
             protocol=mqtt.MQTTv5,
@@ -309,7 +231,7 @@ def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
 
         pub.loop_start()
 
-        # Publish all readings
+        # Publish
         for r in readings:
             payload = json.dumps({
                 "timestamp": r.timestamp,
@@ -321,7 +243,7 @@ def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
 
         log.info("[MQTT] Published %d readings to %s:%d", len(readings), host, port)
 
-        # Collect aggregate replies
+        # Collect
         time.sleep(MQTT_COLLECT_S)
 
         pub.loop_stop()
@@ -334,7 +256,6 @@ def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
 
         log.info("[MQTT] Collected %d aggregates from %s:%d", len(collected), host, port)
 
-    # Fan out to all brokers in parallel threads
     threads = [threading.Thread(target=_handle_one_broker, args=(b,), daemon=True)
                for b in brokers]
     for t in threads:
@@ -354,10 +275,7 @@ def _mqtt_fan_out_sync(brokers: List[str], readings: List[ReadingIn]) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Entry point
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     log.info("Gateway starting on http://%s:%d", GATEWAY_HOST, GATEWAY_PORT)
     uvicorn.run(app, host=GATEWAY_HOST, port=GATEWAY_PORT, log_level="info")
