@@ -1,59 +1,59 @@
 [
   {
     "protocol": "http1",
-    "setup_time_ms": 16.66,
-    "latency_ms": 14.15,
-    "latency_p95_ms": 18.19,
-    "latency_p99_ms": 63.6,
-    "throughput_msg_sec": 70.49,
-    "bytes_total": 169247
+    "setup_time_ms": 93.48,
+    "latency_ms": 68.09,
+    "latency_p95_ms": 73.24,
+    "latency_p99_ms": 97.49,
+    "throughput_msg_sec": 14.67,
+    "bytes_total": 170291
   },
   {
     "protocol": "grpc",
-    "setup_time_ms": 84.65,
-    "latency_ms": 0.58,
-    "latency_p95_ms": 0.58,
-    "latency_p99_ms": 0.58,
-    "throughput_msg_sec": 1722.25,
+    "setup_time_ms": 62.36,
+    "latency_ms": 3.88,
+    "latency_p95_ms": 3.88,
+    "latency_p99_ms": 3.88,
+    "throughput_msg_sec": 257.96,
     "bytes_total": 40000
   },
   {
     "protocol": "websocket",
-    "setup_time_ms": 102.96,
-    "latency_ms": 0.86,
-    "latency_p95_ms": 2.72,
-    "latency_p99_ms": 4.5,
-    "throughput_msg_sec": 1147.65,
-    "bytes_total": 189598
+    "setup_time_ms": 128.61,
+    "latency_ms": 5.15,
+    "latency_p95_ms": 7.46,
+    "latency_p99_ms": 8.54,
+    "throughput_msg_sec": 192.38,
+    "bytes_total": 190586
   },
   {
     "protocol": "mqtt_qos0",
-    "setup_time_ms": 0.45,
-    "latency_ms": 0.01,
+    "setup_time_ms": 0.84,
+    "latency_ms": 0.03,
     "latency_p95_ms": 0.05,
-    "latency_p99_ms": 0.1,
-    "throughput_msg_sec": 386.12,
-    "bytes_total": 160591,
-    "messages_received": 1000
+    "latency_p99_ms": 0.17,
+    "throughput_msg_sec": 33.29,
+    "bytes_total": 148396,
+    "messages_received": 861
   },
   {
     "protocol": "mqtt_qos1",
-    "setup_time_ms": 0.78,
+    "setup_time_ms": 0.88,
     "latency_ms": 0.01,
-    "latency_p95_ms": 0.01,
-    "latency_p99_ms": 0.05,
+    "latency_p95_ms": 0.02,
+    "latency_p99_ms": 0.03,
     "throughput_msg_sec": 33.31,
-    "bytes_total": 125518,
-    "messages_received": 600
+    "bytes_total": 124901,
+    "messages_received": 593
   },
   {
     "protocol": "mqtt_qos2",
-    "setup_time_ms": 0.82,
+    "setup_time_ms": 0.7,
     "latency_ms": 0.01,
     "latency_p95_ms": 0.01,
-    "latency_p99_ms": 0.09,
+    "latency_p99_ms": 0.06,
     "throughput_msg_sec": 33.31,
-    "bytes_total": 144462,
-    "messages_received": 816
+    "bytes_total": 122453,
+    "messages_received": 565
   }
 ]

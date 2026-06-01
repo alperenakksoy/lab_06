@@ -7,8 +7,14 @@ PROXY_NAMES = ["http1", "grpc", "websocket", "mqtt"]
 def remove_all_toxics():
     for name in PROXY_NAMES:
         r = requests.get(f"{API}/proxies/{name}/toxics")
-        for toxic in r.json():
-            requests.delete(f"{API}/proxies/{name}/toxics/{toxic['name']}")
+        toxics = r.json()
+        # API bazen list, bazen dict döndürüyor — ikisini de handle et
+        if isinstance(toxics, dict):
+            toxic_names = list(toxics.keys())
+        else:
+            toxic_names = [t["name"] for t in toxics]
+        for tname in toxic_names:
+            requests.delete(f"{API}/proxies/{name}/toxics/{tname}")
     print("[OK] All toxics removed")
 
 def apply_latency():
@@ -29,7 +35,6 @@ def apply_latency():
     print("[OK] Applied: 200ms RTT latency (100ms each direction + 10ms jitter)")
 
 def apply_loss():
-    """Drop 5% of packets"""
     remove_all_toxics()
     for name in PROXY_NAMES:
         requests.post(f"{API}/proxies/{name}/toxics", json={
@@ -37,7 +42,7 @@ def apply_loss():
             "type":       "slice",
             "stream":     "upstream",
             "attributes": {"average_size": 1, "size_variation": 0, "delay": 0},
-            "toxicity":   0.05,   # 5% of data chunks get this toxic applied
+            "toxicity":   0.05,
         })
         requests.post(f"{API}/proxies/{name}/toxics", json={
             "name":       "loss_down",
@@ -55,24 +60,28 @@ def apply_bandwidth():
             "name":       "bw_up",
             "type":       "bandwidth",
             "stream":     "upstream",
-            "attributes": {"rate": 125},   # KB/s
+            "attributes": {"rate": 10},
         })
         requests.post(f"{API}/proxies/{name}/toxics", json={
             "name":       "bw_down",
             "type":       "bandwidth",
             "stream":     "downstream",
-            "attributes": {"rate": 125},
+            "attributes": {"rate": 10},
         })
-    print("[OK] Applied: 1 Mbit/s bandwidth cap (125 KB/s each direction)")
+    print("[OK] Applied: ~80 Kbit/s bandwidth cap (10 KB/s each direction)")
 
 def status():
     for name in PROXY_NAMES:
         r = requests.get(f"{API}/proxies/{name}/toxics")
         toxics = r.json()
-        if toxics:
+        if isinstance(toxics, dict):
+            items = list(toxics.values())
+        else:
+            items = toxics
+        if items:
             print(f"\n{name}:")
-            for t in toxics:
-                print(f"  {t['name']}: type={t['type']} stream={t['stream']} attrs={t['attributes']} toxicity={t['toxicity']}")
+            for t in items:
+                print(f"  {t['name']}: type={t['type']} stream={t['stream']} toxicity={t['toxicity']}")
         else:
             print(f"{name}: no toxics (clean)")
 
